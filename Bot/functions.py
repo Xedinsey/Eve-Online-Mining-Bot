@@ -124,89 +124,85 @@ def mining_behaviour(
     activate_eve_window: Callable[[], None],
     is_stopped: Callable[[], bool],
     auto_reset_miners: bool,
+    asteroid_depleted: Callable[[], bool] = None,
 ) -> None:
 
-    # start time to counter looptime
     start_time = time.time()
+    targets_selected = False
 
     while True:
         activate_eve_window()
-        if unlock_all_targets_keys:
-            # reset mouse assigned mining laser random in space
+        
+        if asteroid_depleted and asteroid_depleted():
+            logger.info("Астероид истощен - разблокируем цели и выбираем новые")
+            
+            if unlock_all_targets_keys:
+                pyautogui.moveTo(rm_x, rm_y)
+                pyautogui.click(button="left")
+                logger.info(f"Using unlock all targets key: {unlock_all_targets_keys}")
+                for key in unlock_all_targets_keys.split("-"):
+                    pyautogui.keyDown(key)
+                sleep_and_log(0.5)
+                for key in unlock_all_targets_keys.split("-"):
+                    pyautogui.keyUp(key)
+                sleep_and_log(0.5)
+            else:
+                logger.info("Manually unlocking targets 1 and 2")
+                pyautogui.moveTo(tx1, ty1)
+                pyautogui.keyDown("ctrl")
+                pyautogui.keyDown("shift")
+                pyautogui.click(button="left")
+                pyautogui.keyUp("ctrl")
+                pyautogui.keyUp("shift")
+                sleep_and_log(0.5)
+                
+                pyautogui.moveTo(tx2, ty2)
+                pyautogui.keyDown("ctrl")
+                pyautogui.keyDown("shift")
+                pyautogui.click(button="left")
+                pyautogui.keyUp("ctrl")
+                pyautogui.keyUp("shift")
+                sleep_and_log(0.5)
+            
+            targets_selected = False
+        
+        if not targets_selected:
+            if auto_reset_miners:
+                pyautogui.keyDown("f1")
+                sleep_and_log(0.5)
+                pyautogui.keyUp("f1")
+                sleep_and_log(1)
+                pyautogui.keyDown("f2")
+                sleep_and_log(0.5)
+                pyautogui.keyUp("f2")
+
             pyautogui.moveTo(rm_x, rm_y)
-            pyautogui.click(button="left")
-            logger.info(f"Using unlock all targets key: {unlock_all_targets_keys}")
-            for key in unlock_all_targets_keys.split("-"):
-                pyautogui.keyDown(key)
+            pyautogui.click(button="right")
             sleep_and_log(0.5)
-            for key in unlock_all_targets_keys.split("-"):
-                pyautogui.keyUp(key)
-            sleep_and_log(0.5)
-        else:
-            logger.info("Manually unlocking targets 1 and 2")
-            # reset target 1
+
+            logger.info("mining...")
+
             pyautogui.moveTo(tx1, ty1)
             pyautogui.keyDown("ctrl")
-            pyautogui.keyDown("shift")
             pyautogui.click(button="left")
             pyautogui.keyUp("ctrl")
-            pyautogui.keyUp("shift")
+            sleep_and_log(3)
+            activate_eve_window()
+            pyautogui.press("f1")
 
             sleep_and_log(0.5)
 
-            # reset target 2
             pyautogui.moveTo(tx2, ty2)
             pyautogui.keyDown("ctrl")
-            pyautogui.keyDown("shift")
             pyautogui.click(button="left")
             pyautogui.keyUp("ctrl")
-            pyautogui.keyUp("shift")
+            sleep_and_log(3)
+            activate_eve_window()
+            pyautogui.click(button="left")
+            pyautogui.press("f2")
+            
+            targets_selected = True
 
-        if auto_reset_miners:
-            # reset mininglaser 1
-            pyautogui.keyDown("f1")
-            sleep_and_log(0.5)
-            pyautogui.keyUp("f1")
-
-            sleep_and_log(1)
-
-            # reset mininglaser 2
-            pyautogui.keyDown("f2")
-            sleep_and_log(0.5)
-            pyautogui.keyUp("f2")
-
-        # reset mouse assigned mining laser random in space
-        pyautogui.moveTo(rm_x, rm_y)
-        pyautogui.click(button="right")
-
-        sleep_and_log(0.5)
-
-        # console
-        logger.info("mining...")
-
-        # target 1
-        pyautogui.moveTo(tx1, ty1)
-        pyautogui.keyDown("ctrl")
-        pyautogui.click(button="left")
-        pyautogui.keyUp("ctrl")
-        sleep_and_log(3)
-        activate_eve_window()
-        pyautogui.press("f1")
-
-        sleep_and_log(0.5)
-
-        # target 2
-        pyautogui.moveTo(tx2, ty2)
-        pyautogui.keyDown("ctrl")
-        pyautogui.click(button="left")
-        pyautogui.keyUp("ctrl")
-        sleep_and_log(3)
-        activate_eve_window()
-        # second left click to focus the second target
-        pyautogui.click(button="left")
-        pyautogui.press("f2")
-
-        # reset every 170 seconds (depends on mining barge)
         set_next_reset(mining_reset, NEXT_RESET_IN)
         sleep_and_log(mining_reset)
         logger.info("reset mining script...")

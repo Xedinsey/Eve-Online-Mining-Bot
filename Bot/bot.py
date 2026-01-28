@@ -59,6 +59,7 @@ selected_eve_window: Any = None
 event_listener: EveEventListener = EveEventListener()
 cargo_full_event = threading.Event()
 under_attack_event = threading.Event()
+asteroid_depleted_event = threading.Event()
 
 # Mining functions
 #########################################################
@@ -639,10 +640,16 @@ def on_under_attack_event(event_type: str, line: str) -> None:
     under_attack_event.set()
 
 
+def on_asteroid_depleted_event(event_type: str, line: str) -> None:
+    logger.warning("Обнаружено событие: Астероид истощен!")
+    asteroid_depleted_event.set()
+
+
 def init_event_listener() -> None:
     try:
         event_listener.register_event('cargo_full', on_cargo_full_event)
         event_listener.register_event('under_attack', on_under_attack_event)
+        event_listener.register_event('mining_complete', on_asteroid_depleted_event)
         
         if event_listener.start():
             logger.info("Слушатель событий Eve Online успешно запущен")
@@ -734,6 +741,9 @@ def step_mining() -> None:
             def check_cargo_full() -> bool:
                 return cargo_full_event.is_set()
             
+            def check_asteroid_depleted() -> bool:
+                return asteroid_depleted_event.is_set()
+            
             fe.mining_behaviour(
                 tx1=tx1,
                 ty1=ty1,
@@ -747,6 +757,7 @@ def step_mining() -> None:
                 activate_eve_window=activate_eve_window,
                 is_stopped=check_cargo_full,
                 auto_reset_miners=auto_reset_miners,
+                asteroid_depleted=check_asteroid_depleted,
             )
             fe.drone_in()
             fe.sleep_and_log(SMALL_SLEEP)
@@ -898,6 +909,7 @@ def repeat_function(cargo_loading_time: float, start_from_step: str = "undock") 
         if current_start_index <= step_order.index("mining"):
             cargo_full_event.clear()
             under_attack_event.clear()
+            asteroid_depleted_event.clear()
             rm_x, rm_y = get_coo_or_error(config.get_mouse_reset_coo(), "mouse_reset_coo")
             fe.drone_out(x=rm_x, y=rm_y)
             tx1, ty1 = get_coo_or_error(config.get_target_one_coo(), "target_one_coo")
@@ -914,6 +926,9 @@ def repeat_function(cargo_loading_time: float, start_from_step: str = "undock") 
                     return True
                 return False
             
+            def check_asteroid_depleted() -> bool:
+                return asteroid_depleted_event.is_set()
+            
             fe.mining_behaviour(
                 tx1=tx1,
                 ty1=ty1,
@@ -927,6 +942,7 @@ def repeat_function(cargo_loading_time: float, start_from_step: str = "undock") 
                 activate_eve_window=activate_eve_window,
                 is_stopped=check_stop_conditions,
                 auto_reset_miners=auto_reset_miners,
+                asteroid_depleted=check_asteroid_depleted,
             )
             activate_eve_window()
             fe.drone_in()
