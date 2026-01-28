@@ -7,13 +7,14 @@ import time
 import tkinter as tk
 import tkinter.font as tkFont
 from datetime import datetime
-from typing import Any, List
+from typing import Any, List, Tuple
 
 import pyautogui
 from loguru import logger
 
 from Bot import config as cfg
 from Bot import functions as fe
+from Bot.event_listener import EveEventListener
 
 config = cfg.ConfigHandler("config.properties")  # type: ignore
 
@@ -55,6 +56,9 @@ LONG_SLEEP = 100
 
 stop_flag = False
 selected_eve_window: Any = None
+event_listener: EveEventListener = EveEventListener()
+cargo_full_event = threading.Event()
+under_attack_event = threading.Event()
 
 # Mining functions
 #########################################################
@@ -233,7 +237,11 @@ undock_coo_entry.insert(tk.END, format_coo(config.get_undock_coo()))
 
 def test_undock():
     save_properties()
-    pyautogui.moveTo(*config.get_undock_coo())
+    try:
+        x, y = get_coo_or_error(config.get_undock_coo(), "undock_coo")
+        pyautogui.moveTo(x, y)
+    except ValueError as e:
+        logger.error(str(e))
 
 
 undock_test_button = tk.Button(
@@ -273,7 +281,11 @@ def execute_and_enable(button, func):
 
 def test_clear_cargo():
     save_properties()
-    fe.clear_cargo(*config.get_clear_cargo_coo())
+    try:
+        x, y = get_coo_or_error(config.get_clear_cargo_coo(), "clear_cargo_coo")
+        fe.clear_cargo(x=x, y=y)
+    except ValueError as e:
+        logger.error(str(e))
 
 
 clear_cargo_check_button = tk.Button(
@@ -297,7 +309,11 @@ target_one_coo_entry.insert(tk.END, format_coo(config.get_target_one_coo()))
 
 def test_target_one():
     save_properties()
-    pyautogui.moveTo(*config.get_target_one_coo())
+    try:
+        x, y = get_coo_or_error(config.get_target_one_coo(), "target_one_coo")
+        pyautogui.moveTo(x, y)
+    except ValueError as e:
+        logger.error(str(e))
 
 
 target_one_coo_test_button = tk.Button(
@@ -323,7 +339,11 @@ target_two_coo_entry.insert(tk.END, format_coo(config.get_target_two_coo()))
 
 def test_target_two():
     save_properties()
-    pyautogui.moveTo(*config.get_target_two_coo())
+    try:
+        x, y = get_coo_or_error(config.get_target_two_coo(), "target_two_coo")
+        pyautogui.moveTo(x, y)
+    except ValueError as e:
+        logger.error(str(e))
 
 
 target_two_coo_test_button = tk.Button(
@@ -349,7 +369,11 @@ mouse_reset_coo_entry.insert(tk.END, format_coo(config.get_mouse_reset_coo()))
 
 def test_mouse_reset():
     save_properties()
-    pyautogui.moveTo(*config.get_mouse_reset_coo())
+    try:
+        x, y = get_coo_or_error(config.get_mouse_reset_coo(), "mouse_reset_coo")
+        pyautogui.moveTo(x, y)
+    except ValueError as e:
+        logger.error(str(e))
 
 
 mouse_reset_coo_test_button = tk.Button(
@@ -375,7 +399,11 @@ home_coo_entry.insert(tk.END, format_coo(config.get_home_coo()))
 
 def test_warp_to():
     save_properties()
-    pyautogui.moveTo(*config.get_home_coo())
+    try:
+        x, y = get_coo_or_error(config.get_home_coo(), "warp_to_coo")
+        pyautogui.moveTo(x, y)
+    except ValueError as e:
+        logger.error(str(e))
 
 
 home_coo_test_button = tk.Button(
@@ -416,6 +444,42 @@ panic_button.grid(row=0, column=2, padx=(10, 0), pady=10, ipadx=5)
 save_button = tk.Button(button_frame, text="Save")
 save_button.grid(row=0, column=3, padx=(20, 0), pady=10, ipadx=5)
 
+# Start from step selection
+########################################################
+start_from_label = tk.Label(button_frame, text="Начать с этапа:")
+start_from_label.grid(row=1, column=0, padx=(0, 5), pady=5, sticky="w")
+
+start_from_var = tk.StringVar(value="undock")
+start_from_options = [
+    ("Отстыковка", "undock"),
+    ("Варп на бельт", "warp"),
+    ("Сбор руды", "mining"),
+    ("Пристыковка", "dock"),
+    ("Очистка трюма", "clear_cargo")
+]
+
+start_from_menu = tk.OptionMenu(
+    button_frame, 
+    start_from_var, 
+    "undock",
+    "warp",
+    "mining",
+    "dock",
+    "clear_cargo"
+)
+start_from_menu.grid(row=1, column=1, padx=5, pady=5, sticky="w")
+
+########################################################
+# Step-by-step control buttons
+########################################################
+
+step_control_frame = tk.Frame(root)
+step_control_frame.pack(pady=10)
+
+bold_font = tkFont.Font(weight="bold")
+step_label = tk.Label(step_control_frame, text="Пошаговое управление:", font=bold_font)
+step_label.grid(row=0, column=0, columnspan=5, pady=(0, 5), sticky="w")
+
 ########################################################
 
 
@@ -431,8 +495,6 @@ def insert_mouse_position(event) -> None:
 # Create a label to display the mouse position
 mouse_position_label = tk.Label(root, text="")
 mouse_position_label.pack(pady=10)
-
-bold_font = tkFont.Font(weight="bold")
 
 
 # Function to update the mouse position
@@ -558,6 +620,210 @@ def stop_function() -> None:
     logger.warning("The mining script will end on next reset!")
 
 
+def get_coo_or_error(coo_list: List[int], param_name: str) -> Tuple[int, int]:
+    if len(coo_list) != 2:
+        raise ValueError(
+            f"Координаты '{param_name}' не заданы в config.properties. "
+            f"Пожалуйста, укажите координаты в формате: {param_name} = x, y"
+        )
+    return coo_list[0], coo_list[1]
+
+
+def on_cargo_full_event(event_type: str, line: str) -> None:
+    logger.warning("Обнаружено событие: Карго заполнено!")
+    cargo_full_event.set()
+
+
+def on_under_attack_event(event_type: str, line: str) -> None:
+    logger.warning("Обнаружено событие: Атака!")
+    under_attack_event.set()
+
+
+def init_event_listener() -> None:
+    try:
+        event_listener.register_event('cargo_full', on_cargo_full_event)
+        event_listener.register_event('under_attack', on_under_attack_event)
+        
+        if event_listener.start():
+            logger.info("Слушатель событий Eve Online успешно запущен")
+        else:
+            logger.warning("Не удалось запустить слушатель событий")
+    except Exception as e:
+        logger.error(f"Ошибка при инициализации слушателя событий: {e}")
+
+
+def stop_event_listener() -> None:
+    try:
+        event_listener.stop()
+        logger.info("Слушатель событий остановлен")
+    except Exception as e:
+        logger.error(f"Ошибка при остановке слушателя событий: {e}")
+
+
+def step_undock() -> None:
+    def execute_function() -> None:
+        try:
+            activate_eve_window()
+            undock_x, undock_y = get_coo_or_error(config.get_undock_coo(), "undock_coo")
+            fe.undock(x=undock_x, y=undock_y)
+            fe.sleep_and_log(SMALL_SLEEP)
+            fe.set_hardener_online(config.get_hardener_keys())
+            logger.info("Отстыковка завершена")
+        except ValueError as e:
+            logger.error(str(e))
+        except Exception as e:
+            logger.error(f"Ошибка при отстыковке: {e}")
+    
+    thread = threading.Thread(target=execute_function)
+    thread.start()
+
+
+def step_dock() -> None:
+    def execute_function() -> None:
+        try:
+            activate_eve_window()
+            home_coo = config.get_home_coo()
+            if len(home_coo) != 2:
+                raise ValueError("Координаты 'warp_to_coo' не заданы в config.properties")
+            fe.auto_dock_to_station(home_coo)
+            fe.sleep_and_log(LONG_SLEEP)
+            logger.info("Пристыковка завершена")
+        except ValueError as e:
+            logger.error(str(e))
+        except Exception as e:
+            logger.error(f"Ошибка при пристыковке: {e}")
+    
+    thread = threading.Thread(target=execute_function)
+    thread.start()
+
+
+def step_warp_to_belt() -> None:
+    def execute_function() -> None:
+        try:
+            activate_eve_window()
+            mining_coo_list = config.get_mining_coo()
+            if not mining_coo_list:
+                raise ValueError("Координаты 'mining_coo' не заданы в config.properties")
+            item = fe.get_random_coord(mining_coo_list)
+            fe.click_top_left_circle_menu(item[0], item[1])
+            fe.sleep_and_log(warping_time)
+            logger.info("Варп на бельт завершен")
+        except ValueError as e:
+            logger.error(str(e))
+        except Exception as e:
+            logger.error(f"Ошибка при варпе на бельт: {e}")
+    
+    thread = threading.Thread(target=execute_function)
+    thread.start()
+
+
+def step_mining() -> None:
+    def execute_function() -> None:
+        try:
+            cargo_full_event.clear()
+            activate_eve_window()
+            rm_x, rm_y = get_coo_or_error(config.get_mouse_reset_coo(), "mouse_reset_coo")
+            fe.drone_out(x=rm_x, y=rm_y)
+            tx1, ty1 = get_coo_or_error(config.get_target_one_coo(), "target_one_coo")
+            tx2, ty2 = get_coo_or_error(config.get_target_two_coo(), "target_two_coo")
+            
+            mining_hold = config.get_mining_hold()
+            mining_yield = config.get_mining_yield()
+            cargo_loading_time = get_cargo_loading_time(mining_hold, mining_yield)
+            
+            def check_cargo_full() -> bool:
+                return cargo_full_event.is_set()
+            
+            fe.mining_behaviour(
+                tx1=tx1,
+                ty1=ty1,
+                tx2=tx2,
+                ty2=ty2,
+                mining_reset=config.get_mining_reset_timer(),
+                mining_loop=cargo_loading_time,
+                rm_x=rm_x,
+                rm_y=rm_y,
+                unlock_all_targets_keys=config.get_unlock_all_targets_key(),
+                activate_eve_window=activate_eve_window,
+                is_stopped=check_cargo_full,
+                auto_reset_miners=auto_reset_miners,
+            )
+            fe.drone_in()
+            fe.sleep_and_log(SMALL_SLEEP)
+            logger.info("Сбор руды завершен")
+        except ValueError as e:
+            logger.error(str(e))
+        except Exception as e:
+            logger.error(f"Ошибка при сборе руды: {e}")
+    
+    thread = threading.Thread(target=execute_function)
+    thread.start()
+
+
+def step_clear_cargo() -> None:
+    def execute_function() -> None:
+        try:
+            activate_eve_window()
+            cg_x, cg_y = get_coo_or_error(config.get_clear_cargo_coo(), "clear_cargo_coo")
+            fe.clear_cargo(x=cg_x, y=cg_y)
+            logger.info("Очистка трюма завершена")
+        except ValueError as e:
+            logger.error(str(e))
+        except Exception as e:
+            logger.error(f"Ошибка при очистке трюма: {e}")
+    
+    thread = threading.Thread(target=execute_function)
+    thread.start()
+
+
+undock_step_button = tk.Button(
+    step_control_frame,
+    text="Отстыковка",
+    command=step_undock,
+    bg="#4CAF50",
+    fg="white"
+)
+undock_step_button.grid(row=1, column=0, padx=5, pady=5, ipadx=5)
+
+dock_step_button = tk.Button(
+    step_control_frame,
+    text="Пристыковка",
+    command=step_dock,
+    bg="#2196F3",
+    fg="white"
+)
+dock_step_button.grid(row=1, column=1, padx=5, pady=5, ipadx=5)
+
+warp_belt_step_button = tk.Button(
+    step_control_frame,
+    text="Варп на бельт",
+    command=step_warp_to_belt,
+    bg="#FF9800",
+    fg="white"
+)
+warp_belt_step_button.grid(row=1, column=2, padx=5, pady=5, ipadx=5)
+
+mining_step_button = tk.Button(
+    step_control_frame,
+    text="Сбор руды",
+    command=step_mining,
+    bg="#9C27B0",
+    fg="white"
+)
+mining_step_button.grid(row=1, column=3, padx=5, pady=5, ipadx=5)
+
+clear_cargo_step_button = tk.Button(
+    step_control_frame,
+    text="Очистить трюм",
+    command=step_clear_cargo,
+    bg="#F44336",
+    fg="white"
+)
+clear_cargo_step_button.grid(row=1, column=4, padx=5, pady=5, ipadx=5)
+
+########################################################
+
+
 def panic_function() -> None:
     logger.warning("Panic! Bring in drones and dock to station")
     panic_button.config(state=tk.DISABLED)
@@ -565,7 +831,7 @@ def panic_function() -> None:
     def execute_function() -> None:
         stop_function()
         activate_eve_window()
-        x, y = config.get_mouse_reset_coo()
+        x, y = get_coo_or_error(config.get_mouse_reset_coo(), "mouse_reset_coo")
         pyautogui.moveTo(x, y)
         pyautogui.click(button="left")
         fe.drone_in()
@@ -592,59 +858,100 @@ def save_properties() -> None:
     logger.info("Configuration updated")
 
 
-def repeat_function(cargo_loading_time: float) -> None:
+def repeat_function(cargo_loading_time: float, start_from_step: str = "undock") -> None:
     disable_fields()
     actual_mining_runs = 0
     mining_runs = config.get_mining_runs()
     update_mining_runs(actual_mining_runs, mining_runs)
+    
+    step_order = ["undock", "warp", "mining", "dock", "clear_cargo"]
+    start_index = step_order.index(start_from_step) if start_from_step in step_order else 0
+    
+    logger.info(f"Начинаем цикл с этапа: {start_from_step}")
+    
+    is_first_run = True
+    
     while not stop_flag and actual_mining_runs < mining_runs:
         activate_eve_window()
         fe.set_next_reset(cargo_loading_time, fe.CARGO_LOAD_TIME)
         loaded_in_str = fe.get_remaining_time(cargo_loading_time)
         logger.info(f"The mining cargo is filled in about {loaded_in_str}")
         time.sleep(1)
-        undock_x, undock_y = config.get_undock_coo()
-        fe.undock(x=undock_x, y=undock_y)
-        fe.sleep_and_log(SMALL_SLEEP)
-        fe.set_hardener_online(config.get_hardener_keys())
-        item = fe.get_random_coord(config.get_mining_coo())
-        fe.click_top_left_circle_menu(item[0], item[1])
-        fe.sleep_and_log(warping_time)
-        activate_eve_window()
-        rm_x, rm_y = config.get_mouse_reset_coo()
-        fe.drone_out(x=rm_x, y=rm_y)
-        tx1, ty1 = config.get_target_one_coo()
-        tx2, ty2 = config.get_target_two_coo()
-        fe.mining_behaviour(
-            tx1=tx1,
-            ty1=ty1,
-            tx2=tx2,
-            ty2=ty2,
-            mining_reset=config.get_mining_reset_timer(),
-            mining_loop=cargo_loading_time,
-            rm_x=rm_x,
-            rm_y=rm_y,
-            unlock_all_targets_keys=config.get_unlock_all_targets_key(),
-            activate_eve_window=activate_eve_window,
-            is_stopped=lambda: stop_flag,
-            auto_reset_miners=auto_reset_miners,
-        )
-        activate_eve_window()
-        fe.drone_in()
-        fe.sleep_and_log(SMALL_SLEEP)
-        fe.auto_dock_to_station(config.get_home_coo())
-        # sleep long enough to be in station when program wakes up
-        fe.sleep_and_log(LONG_SLEEP)
-        # docking will take some time, need to refocus window
-        activate_eve_window()
-        cg_x, cg_y = config.get_clear_cargo_coo()
-        fe.clear_cargo(x=cg_x, y=cg_y)
+        
+        current_start_index = start_index if is_first_run else 0
+        
+        # Undock step
+        if current_start_index <= step_order.index("undock"):
+            undock_x, undock_y = get_coo_or_error(config.get_undock_coo(), "undock_coo")
+            fe.undock(x=undock_x, y=undock_y)
+            fe.sleep_and_log(SMALL_SLEEP)
+            fe.set_hardener_online(config.get_hardener_keys())
+        
+        # Warp to belt step
+        if current_start_index <= step_order.index("warp"):
+            item = fe.get_random_coord(config.get_mining_coo())
+            fe.click_top_left_circle_menu(item[0], item[1])
+            fe.sleep_and_log(warping_time)
+            activate_eve_window()
+        
+        # Mining step
+        if current_start_index <= step_order.index("mining"):
+            cargo_full_event.clear()
+            under_attack_event.clear()
+            rm_x, rm_y = get_coo_or_error(config.get_mouse_reset_coo(), "mouse_reset_coo")
+            fe.drone_out(x=rm_x, y=rm_y)
+            tx1, ty1 = get_coo_or_error(config.get_target_one_coo(), "target_one_coo")
+            tx2, ty2 = get_coo_or_error(config.get_target_two_coo(), "target_two_coo")
+            
+            def check_stop_conditions() -> bool:
+                if stop_flag:
+                    return True
+                if cargo_full_event.is_set():
+                    logger.info("Карго заполнено - завершаем майнинг")
+                    return True
+                if under_attack_event.is_set():
+                    logger.warning("Обнаружена атака - завершаем майнинг")
+                    return True
+                return False
+            
+            fe.mining_behaviour(
+                tx1=tx1,
+                ty1=ty1,
+                tx2=tx2,
+                ty2=ty2,
+                mining_reset=config.get_mining_reset_timer(),
+                mining_loop=cargo_loading_time,
+                rm_x=rm_x,
+                rm_y=rm_y,
+                unlock_all_targets_keys=config.get_unlock_all_targets_key(),
+                activate_eve_window=activate_eve_window,
+                is_stopped=check_stop_conditions,
+                auto_reset_miners=auto_reset_miners,
+            )
+            activate_eve_window()
+            fe.drone_in()
+            fe.sleep_and_log(SMALL_SLEEP)
+        
+        # Dock step
+        if current_start_index <= step_order.index("dock"):
+            fe.auto_dock_to_station(config.get_home_coo())
+            fe.sleep_and_log(LONG_SLEEP)
+            activate_eve_window()
+        
+        # Clear cargo step
+        if current_start_index <= step_order.index("clear_cargo"):
+            cg_x, cg_y = get_coo_or_error(config.get_clear_cargo_coo(), "clear_cargo_coo")
+            fe.clear_cargo(x=cg_x, y=cg_y)
+        
         actual_mining_runs += 1
         update_mining_runs(actual_mining_runs, mining_runs)
         if take_screenshots:
             img = pyautogui.screenshot()
             now_str = datetime.now().strftime("%d-%m-%Y-%H-%M-%S")
             img.save(f"eve_screenshot_{now_str}.png")
+        
+        is_first_run = False
+    
     total_runs_str = f"{actual_mining_runs}/{mining_runs}"
     logger.info(f"Completed {total_runs_str} mining sessions")
     enable_fields()
@@ -658,8 +965,10 @@ def start_function() -> None:
     mining_hold_value = config.get_mining_hold()
     mining_yield_value = config.get_mining_yield()
     mining_reset_timer = config.get_mining_reset_timer()
+    start_from = start_from_var.get()
     logger.info("The mining script will run {} mining runs!", mining_runs)
     logger.info("Using miner reset timer of {} seconds.", mining_reset_timer)
+    logger.info("Starting from step: {}", start_from)
     cargo_loading_time = get_cargo_loading_time(mining_hold_value, mining_yield_value)
     estimated_run_time = get_estimated_run_time(
         mining_runs=mining_runs,
@@ -669,7 +978,7 @@ def start_function() -> None:
     estimated_run_time_str = fe.get_remaining_time(estimated_run_time)
     logger.info(f"Estimate for completion is {estimated_run_time_str}")
     thread = threading.Thread(
-        target=lambda: repeat_function(cargo_loading_time=cargo_loading_time)
+        target=lambda: repeat_function(cargo_loading_time=cargo_loading_time, start_from_step=start_from)
     )
     thread.start()
 
@@ -683,5 +992,14 @@ save_button.config(command=save_properties)
 def start() -> None:
     logger.info("Starting bot")
     logger.trace("Hi")
-    # Start Tkinter Window
+    
+    init_event_listener()
+    
+    root.protocol("WM_DELETE_WINDOW", on_closing)
+    
     root.mainloop()
+
+
+def on_closing() -> None:
+    stop_event_listener()
+    root.destroy()

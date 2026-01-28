@@ -212,8 +212,13 @@ def mining_behaviour(
         logger.info("reset mining script...")
 
         elapsed_time = time.time() - start_time
-        if elapsed_time >= mining_loop or is_stopped():
-            logger.info("Done mining")
+        
+        if is_stopped():
+            logger.info("Mining stopped")
+            break
+        
+        if elapsed_time >= mining_loop:
+            logger.info("Done mining - time limit reached")
             break
 
 
