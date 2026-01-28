@@ -929,6 +929,13 @@ def repeat_function(cargo_loading_time: float, start_from_step: str = "undock") 
                 logger.info("Варп завершен по событию")
             else:
                 logger.warning("Событие варпа не получено, используем таймаут")
+            
+            logger.info("Запускаем дронов для защиты после варпа...")
+            activate_eve_window()
+            pyautogui.keyDown("shift")
+            pyautogui.press("f")
+            pyautogui.keyUp("shift")
+            fe.sleep_and_log(1)
         
         if stop_flag:
             break
