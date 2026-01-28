@@ -74,7 +74,8 @@ def click_top_center_circle_menu(x: int, y: int) -> None:
 def drone_out(x: int, y: int) -> None:
     logger.info("launching drones...")
     # drone out, random click in space
-    pyautogui.click(x, y, button="left", duration=random.uniform(1, 2))
+    pyautogui.moveTo(x, y, duration=random.uniform(1, 2))
+    pyautogui.click(button="left")
     # drone out
     sleep_and_log(3)
     pyautogui.keyDown("shift")
@@ -82,6 +83,7 @@ def drone_out(x: int, y: int) -> None:
     sleep_and_log(0.5)
     # Umschalt loslassen
     pyautogui.keyUp("shift")
+    sleep_and_log(1)
 
 
 def drone_in() -> None:
@@ -203,10 +205,6 @@ def mining_behaviour(
             
             targets_selected = True
 
-        set_next_reset(mining_reset, NEXT_RESET_IN)
-        sleep_and_log(mining_reset)
-        logger.info("reset mining script...")
-
         elapsed_time = time.time() - start_time
         
         if is_stopped():
@@ -216,6 +214,8 @@ def mining_behaviour(
         if elapsed_time >= mining_loop:
             logger.info("Done mining - time limit reached")
             break
+        
+        sleep_and_log(1)
 
 
 # Constants for timers
