@@ -60,7 +60,6 @@ event_listener: EveEventListener = EveEventListener()
 cargo_full_event = threading.Event()
 under_attack_event = threading.Event()
 asteroid_depleted_event = threading.Event()
-warp_complete_event = threading.Event()
 
 # Mining functions
 #########################################################
@@ -647,11 +646,6 @@ def on_asteroid_depleted_event(event_type: str, line: str) -> None:
     asteroid_depleted_event.set()
 
 
-def on_warp_complete_event(event_type: str, line: str) -> None:
-    logger.info(f"Обнаружено событие: Варп завершен! Строка: {line.strip()[:150]}")
-    warp_complete_event.set()
-
-
 def init_event_listener() -> None:
     try:
         event_listener.register_event('cargo_full', on_cargo_full_event)
@@ -921,21 +915,22 @@ def repeat_function(cargo_loading_time: float, start_from_step: str = "undock") 
             item = fe.get_random_coord(config.get_mining_coo())
             fe.click_top_left_circle_menu(item[0], item[1])
             
-            logger.info(f"Ожидание завершения варпа на пояс астероидов (таймаут: {warping_time + 10} секунд)...")
-            warp_timeout = warping_time + 10
+            warp_timeout = warping_time + 10 if warping_time else 80
+            logger.info(f"Ожидание завершения варпа на пояс астероидов (таймаут: {warp_timeout} секунд)...")
             warp_complete_event.wait(timeout=warp_timeout)
             
             if warp_complete_event.is_set():
-                logger.info("Варп завершен по событию")
+                logger.info("Варп завершен по событию - запускаем дронов")
             else:
-                logger.warning("Событие варпа не получено, используем таймаут")
+                logger.warning(f"Событие варпа не получено за {warp_timeout} секунд, запускаем дронов по таймауту")
             
-            logger.info("Запускаем дронов для защиты после варпа...")
+            logger.info("Запускаем дронов для защиты после варпа (shift+f)...")
             activate_eve_window()
             pyautogui.keyDown("shift")
             pyautogui.press("f")
             pyautogui.keyUp("shift")
             fe.sleep_and_log(1)
+            logger.info("Дроны запущены")
         
         if stop_flag:
             break

@@ -49,7 +49,7 @@ class EveLogHandler:
                             should_check = True
                         elif '(mining)' in line_stripped or '(notify)' in line_stripped or '(combat)' in line_stripped or '(system)' in line_stripped:
                             should_check = True
-                        elif 'warp' in line_lower_check or 'варп' in line_lower_check or 'arrived' in line_lower_check or 'прибыл' in line_lower_check or 'destination' in line_lower_check or 'назначение' in line_lower_check:
+                        elif any(keyword in line_lower_check for keyword in ['warp', 'варп', 'arrived', 'прибыл', 'destination', 'назначение', 'arrival', 'прибытие', 'reached', 'достигнут']):
                             should_check = True
                         elif '(local)' in line_stripped or '(location)' in line_stripped:
                             should_check = True
@@ -65,8 +65,8 @@ class EveLogHandler:
         line_clean = re.sub(r'\*', '', line_clean)
         line_clean = re.sub(r'\s+', ' ', line_clean).strip()
         
-        if 'warp' in line_clean or 'варп' in line_clean or 'arrived' in line_clean or 'прибыл' in line_clean:
-            logger.debug(f"Проверка строки на события варпа: {line_clean[:150]}")
+        if 'warp' in line_clean or 'варп' in line_clean or 'arrived' in line_clean or 'прибыл' in line_clean or 'arrival' in line_clean or 'прибытие' in line_clean:
+            logger.info(f"Проверка строки на события варпа: {line_clean[:200]}")
         
         cargo_full_patterns = [
             'your cargo hold is full',
@@ -132,7 +132,21 @@ class EveLogHandler:
                 'destination reached',
                 'достигнуто место назначения',
                 'you have arrived',
-                'вы прибыли'
+                'вы прибыли',
+                'warp drive engaged',
+                'warp drive disengaged',
+                'варп-двигатель активирован',
+                'варп-двигатель деактивирован',
+                'warping to',
+                'warped to',
+                'варп к',
+                'прибыл к',
+                'arrived in',
+                'прибыл в систему',
+                'warp complete.*belt',
+                'warp complete.*asteroid',
+                'варп завершен.*пояс',
+                'варп завершен.*астероид'
             ],
             'docking_accepted': [
                 'docking request accepted',
@@ -182,14 +196,17 @@ class EveLogHandler:
         
         for event_type, patterns in event_patterns.items():
             for pattern in patterns:
+                matched = False
                 if '*' in pattern:
                     regex_pattern = pattern.replace('*', '.*')
                     if re.search(regex_pattern, line_clean, re.IGNORECASE):
-                        logger.debug(f"Найден паттерн {pattern} для события {event_type}")
-                        self._trigger_event(event_type, line)
-                        break
+                        logger.info(f"Найден regex паттерн {pattern} для события {event_type} в строке: {line_clean[:150]}")
+                        matched = True
                 elif pattern in line_clean:
-                    logger.debug(f"Найден паттерн {pattern} для события {event_type}")
+                    logger.info(f"Найден паттерн {pattern} для события {event_type} в строке: {line_clean[:150]}")
+                    matched = True
+                
+                if matched:
                     self._trigger_event(event_type, line)
                     break
     
@@ -266,7 +283,7 @@ class EveEventListener:
                     if log_file.is_file() and self.handler:
                         file_path_str = str(log_file)
                         if file_path_str not in processed_files:
-                            logger.debug(f"Мониторинг файла лога: {log_file.name}")
+                            logger.info(f"Мониторинг файла лога: {log_file.name} (путь: {file_path_str})")
                             processed_files.add(file_path_str)
                         self.handler._process_log_file(file_path_str)
             except Exception as e:

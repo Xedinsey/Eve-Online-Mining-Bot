@@ -181,6 +181,7 @@ def mining_behaviour(
                 pyautogui.keyDown("f2")
                 sleep_and_log(0.5)
                 pyautogui.keyUp("f2")
+                sleep_and_log(0.5)
 
             pyautogui.moveTo(rm_x, rm_y)
             pyautogui.click(button="right")
