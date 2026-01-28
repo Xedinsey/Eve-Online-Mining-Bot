@@ -88,11 +88,10 @@ def drone_out(x: int, y: int) -> None:
 
 def drone_in() -> None:
     logger.info("drones returning to bay...")
-    # drone in
     pyautogui.keyDown("shift")
     pyautogui.press("r")
-    sleep_and_log(0.5)
     pyautogui.keyUp("shift")
+    sleep_and_log(1)
 
 
 def clear_cargo(x: int, y: int) -> None:

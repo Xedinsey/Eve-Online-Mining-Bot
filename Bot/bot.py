@@ -977,10 +977,6 @@ def repeat_function(cargo_loading_time: float, start_from_step: str = "undock") 
                 auto_reset_miners=auto_reset_miners,
                 asteroid_depleted=check_asteroid_depleted,
             )
-            if not stop_flag:
-                activate_eve_window()
-                fe.drone_in()
-                fe.sleep_and_log(SMALL_SLEEP)
         
         if stop_flag:
             break
@@ -990,8 +986,13 @@ def repeat_function(cargo_loading_time: float, start_from_step: str = "undock") 
             logger.info("Собираем дронов перед возвращением на станцию")
             activate_eve_window()
             fe.drone_in()
-            fe.sleep_and_log(SMALL_SLEEP)
+            fe.sleep_and_log(2)
             activate_eve_window()
+            fe.drone_in()
+            logger.info("Ждем возвращения дронов (15 секунд)...")
+            fe.sleep_and_log(15)
+            activate_eve_window()
+            logger.info("Отправляем запрос на стыковку")
             fe.auto_dock_to_station(config.get_home_coo())
             fe.sleep_and_log(LONG_SLEEP)
         
