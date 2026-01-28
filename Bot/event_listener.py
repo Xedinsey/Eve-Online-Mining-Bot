@@ -21,6 +21,8 @@ class EveLogHandler:
             if 'chatlog' in file_name and 'gamelog' not in file_name:
                 return
             
+            is_gamelog = 'gamelog' in file_name
+            
             current_position = self.file_positions.get(file_path, 0)
             
             with open(file_path, 'r', encoding='utf-8', errors='ignore') as f:
@@ -41,9 +43,18 @@ class EveLogHandler:
                         self.processed_lines.add(line_hash)
                         
                         line_lower_check = line_stripped.lower()
-                        if '(mining)' in line or '(notify)' in line or '(combat)' in line or '(system)' in line:
-                            self._check_events(line_stripped)
-                        elif 'warp' in line_lower_check or 'варп' in line_lower_check or 'arrived' in line_lower_check or 'прибыл' in line_lower_check:
+                        should_check = False
+                        
+                        if is_gamelog:
+                            should_check = True
+                        elif '(mining)' in line_stripped or '(notify)' in line_stripped or '(combat)' in line_stripped or '(system)' in line_stripped:
+                            should_check = True
+                        elif 'warp' in line_lower_check or 'варп' in line_lower_check or 'arrived' in line_lower_check or 'прибыл' in line_lower_check or 'destination' in line_lower_check or 'назначение' in line_lower_check:
+                            should_check = True
+                        elif '(local)' in line_stripped or '(location)' in line_stripped:
+                            should_check = True
+                        
+                        if should_check:
                             self._check_events(line_stripped)
         except Exception as e:
             logger.debug(f"Ошибка при чтении лога {file_path}: {e}")
@@ -54,7 +65,8 @@ class EveLogHandler:
         line_clean = re.sub(r'\*', '', line_clean)
         line_clean = re.sub(r'\s+', ' ', line_clean).strip()
         
-        logger.trace(f"Проверка строки на события: {line_clean[:100]}")
+        if 'warp' in line_clean or 'варп' in line_clean or 'arrived' in line_clean or 'прибыл' in line_clean:
+            logger.debug(f"Проверка строки на события варпа: {line_clean[:150]}")
         
         cargo_full_patterns = [
             'your cargo hold is full',
@@ -111,7 +123,16 @@ class EveLogHandler:
                 'вошел в варп',
                 'вышел из варпа',
                 'прибытие',
-                'arrival'
+                'arrival',
+                'arrived at destination',
+                'warp drive deactivated',
+                'варп деактивирован',
+                'exited warp to',
+                'вышел из варпа в',
+                'destination reached',
+                'достигнуто место назначения',
+                'you have arrived',
+                'вы прибыли'
             ],
             'docking_accepted': [
                 'docking request accepted',

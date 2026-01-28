@@ -926,12 +926,9 @@ def repeat_function(cargo_loading_time: float, start_from_step: str = "undock") 
             warp_complete_event.wait(timeout=warp_timeout)
             
             if warp_complete_event.is_set():
-                logger.info("Варп завершен по событию - выпускаем дронов для защиты")
+                logger.info("Варп завершен по событию")
             else:
                 logger.warning("Событие варпа не получено, используем таймаут")
-            
-            activate_eve_window()
-            fe.drone_out(x=rm_x, y=rm_y)
         
         if stop_flag:
             break
