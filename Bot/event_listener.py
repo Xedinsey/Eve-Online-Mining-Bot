@@ -40,7 +40,10 @@ class EveLogHandler:
                             continue
                         self.processed_lines.add(line_hash)
                         
-                        if '(mining)' in line or '(notify)' in line:
+                        line_lower_check = line_stripped.lower()
+                        if '(mining)' in line or '(notify)' in line or '(combat)' in line or '(system)' in line:
+                            self._check_events(line_stripped)
+                        elif 'warp' in line_lower_check or 'варп' in line_lower_check or 'arrived' in line_lower_check or 'прибыл' in line_lower_check:
                             self._check_events(line_stripped)
         except Exception as e:
             logger.debug(f"Ошибка при чтении лога {file_path}: {e}")
@@ -50,6 +53,8 @@ class EveLogHandler:
         line_clean = re.sub(r'<[^>]+>', '', line_lower)
         line_clean = re.sub(r'\*', '', line_clean)
         line_clean = re.sub(r'\s+', ' ', line_clean).strip()
+        
+        logger.trace(f"Проверка строки на события: {line_clean[:100]}")
         
         cargo_full_patterns = [
             'your cargo hold is full',
@@ -94,10 +99,19 @@ class EveLogHandler:
                 'warp drive active',
                 'warp complete',
                 'arrived at',
+                'warping',
+                'warped',
+                'entered warp',
+                'exited warp',
                 'варп активен',
                 'варп завершен',
                 'прибыл в',
-                'корабль прибыл в место назначения'
+                'корабль прибыл в место назначения',
+                'варп',
+                'вошел в варп',
+                'вышел из варпа',
+                'прибытие',
+                'arrival'
             ],
             'docking_accepted': [
                 'docking request accepted',
@@ -150,9 +164,11 @@ class EveLogHandler:
                 if '*' in pattern:
                     regex_pattern = pattern.replace('*', '.*')
                     if re.search(regex_pattern, line_clean, re.IGNORECASE):
+                        logger.debug(f"Найден паттерн {pattern} для события {event_type}")
                         self._trigger_event(event_type, line)
                         break
                 elif pattern in line_clean:
+                    logger.debug(f"Найден паттерн {pattern} для события {event_type}")
                     self._trigger_event(event_type, line)
                     break
     

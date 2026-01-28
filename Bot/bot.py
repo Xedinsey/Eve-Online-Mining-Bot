@@ -648,7 +648,7 @@ def on_asteroid_depleted_event(event_type: str, line: str) -> None:
 
 
 def on_warp_complete_event(event_type: str, line: str) -> None:
-    logger.info("Обнаружено событие: Варп завершен!")
+    logger.info(f"Обнаружено событие: Варп завершен! Строка: {line.strip()[:150]}")
     warp_complete_event.set()
 
 
@@ -921,19 +921,17 @@ def repeat_function(cargo_loading_time: float, start_from_step: str = "undock") 
             item = fe.get_random_coord(config.get_mining_coo())
             fe.click_top_left_circle_menu(item[0], item[1])
             
-            logger.info("Ожидание завершения варпа на пояс астероидов...")
+            logger.info(f"Ожидание завершения варпа на пояс астероидов (таймаут: {warping_time + 10} секунд)...")
             warp_timeout = warping_time + 10
             warp_complete_event.wait(timeout=warp_timeout)
             
             if warp_complete_event.is_set():
-                logger.info("Варп завершен - выпускаем дронов для защиты")
-                activate_eve_window()
-                fe.drone_out(x=rm_x, y=rm_y)
+                logger.info("Варп завершен по событию - выпускаем дронов для защиты")
             else:
                 logger.warning("Событие варпа не получено, используем таймаут")
-                fe.sleep_and_log(warping_time)
-                activate_eve_window()
-                fe.drone_out(x=rm_x, y=rm_y)
+            
+            activate_eve_window()
+            fe.drone_out(x=rm_x, y=rm_y)
         
         if stop_flag:
             break

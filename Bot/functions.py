@@ -174,6 +174,12 @@ def mining_behaviour(
         if not targets_selected:
             activate_eve_window()
             
+            logger.info("Запускаем дронов перед локированием астероида...")
+            pyautogui.keyDown("shift")
+            pyautogui.press("f")
+            pyautogui.keyUp("shift")
+            sleep_and_log(1)
+            
             if auto_reset_miners:
                 pyautogui.keyDown("f1")
                 sleep_and_log(0.5)
