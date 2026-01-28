@@ -60,6 +60,7 @@ event_listener: EveEventListener = EveEventListener()
 cargo_full_event = threading.Event()
 under_attack_event = threading.Event()
 asteroid_depleted_event = threading.Event()
+warp_complete_event = threading.Event()
 
 # Mining functions
 #########################################################
@@ -276,7 +277,7 @@ def execute_and_enable(button, func):
         root.after(1, lambda: button.config(state=tk.NORMAL))
 
     # Run function in a separate thread
-    thread = threading.Thread(target=execute_function)
+    thread = threading.Thread(target=execute_function, daemon=True)
     thread.start()
 
 
@@ -631,8 +632,9 @@ def get_coo_or_error(coo_list: List[int], param_name: str) -> Tuple[int, int]:
 
 
 def on_cargo_full_event(event_type: str, line: str) -> None:
-    logger.warning("Обнаружено событие: Карго заполнено!")
+    logger.warning(f"Обнаружено событие: Карго заполнено! Строка: {line.strip()[:150]}")
     cargo_full_event.set()
+    logger.info("Событие cargo_full_event установлено")
 
 
 def on_under_attack_event(event_type: str, line: str) -> None:
@@ -645,11 +647,17 @@ def on_asteroid_depleted_event(event_type: str, line: str) -> None:
     asteroid_depleted_event.set()
 
 
+def on_warp_complete_event(event_type: str, line: str) -> None:
+    logger.info("Обнаружено событие: Варп завершен!")
+    warp_complete_event.set()
+
+
 def init_event_listener() -> None:
     try:
         event_listener.register_event('cargo_full', on_cargo_full_event)
         event_listener.register_event('under_attack', on_under_attack_event)
         event_listener.register_event('mining_complete', on_asteroid_depleted_event)
+        event_listener.register_event('warp_complete', on_warp_complete_event)
         
         if event_listener.start():
             logger.info("Слушатель событий Eve Online успешно запущен")
@@ -681,7 +689,7 @@ def step_undock() -> None:
         except Exception as e:
             logger.error(f"Ошибка при отстыковке: {e}")
     
-    thread = threading.Thread(target=execute_function)
+    thread = threading.Thread(target=execute_function, daemon=True)
     thread.start()
 
 
@@ -700,7 +708,7 @@ def step_dock() -> None:
         except Exception as e:
             logger.error(f"Ошибка при пристыковке: {e}")
     
-    thread = threading.Thread(target=execute_function)
+    thread = threading.Thread(target=execute_function, daemon=True)
     thread.start()
 
 
@@ -720,7 +728,7 @@ def step_warp_to_belt() -> None:
         except Exception as e:
             logger.error(f"Ошибка при варпе на бельт: {e}")
     
-    thread = threading.Thread(target=execute_function)
+    thread = threading.Thread(target=execute_function, daemon=True)
     thread.start()
 
 
@@ -767,7 +775,7 @@ def step_mining() -> None:
         except Exception as e:
             logger.error(f"Ошибка при сборе руды: {e}")
     
-    thread = threading.Thread(target=execute_function)
+    thread = threading.Thread(target=execute_function, daemon=True)
     thread.start()
 
 
@@ -850,7 +858,7 @@ def panic_function() -> None:
         fe.auto_dock_to_station(config.get_home_coo())
         os._exit(0)
 
-    thread = threading.Thread(target=execute_function)
+    thread = threading.Thread(target=execute_function, daemon=True)
     thread.start()
 
 
@@ -883,36 +891,58 @@ def repeat_function(cargo_loading_time: float, start_from_step: str = "undock") 
     is_first_run = True
     
     while not stop_flag and actual_mining_runs < mining_runs:
-        activate_eve_window()
         fe.set_next_reset(cargo_loading_time, fe.CARGO_LOAD_TIME)
         loaded_in_str = fe.get_remaining_time(cargo_loading_time)
         logger.info(f"The mining cargo is filled in about {loaded_in_str}")
         time.sleep(1)
         
+        if stop_flag:
+            break
+        
         current_start_index = start_index if is_first_run else 0
         
         # Undock step
         if current_start_index <= step_order.index("undock"):
+            activate_eve_window()
             undock_x, undock_y = get_coo_or_error(config.get_undock_coo(), "undock_coo")
             fe.undock(x=undock_x, y=undock_y)
             fe.sleep_and_log(SMALL_SLEEP)
             fe.set_hardener_online(config.get_hardener_keys())
         
+        if stop_flag:
+            break
+        
+        rm_x, rm_y = get_coo_or_error(config.get_mouse_reset_coo(), "mouse_reset_coo")
+        
         # Warp to belt step
         if current_start_index <= step_order.index("warp"):
+            warp_complete_event.clear()
+            activate_eve_window()
             item = fe.get_random_coord(config.get_mining_coo())
             fe.click_top_left_circle_menu(item[0], item[1])
-            fe.sleep_and_log(warping_time)
-            activate_eve_window()
+            
+            logger.info("Ожидание завершения варпа на пояс астероидов...")
+            warp_timeout = warping_time + 10
+            warp_complete_event.wait(timeout=warp_timeout)
+            
+            if warp_complete_event.is_set():
+                logger.info("Варп завершен - выпускаем дронов для защиты")
+                activate_eve_window()
+                fe.drone_out(x=rm_x, y=rm_y)
+            else:
+                logger.warning("Событие варпа не получено, используем таймаут")
+                fe.sleep_and_log(warping_time)
+                activate_eve_window()
+                fe.drone_out(x=rm_x, y=rm_y)
+        
+        if stop_flag:
+            break
         
         # Mining step
         if current_start_index <= step_order.index("mining"):
             cargo_full_event.clear()
             under_attack_event.clear()
             asteroid_depleted_event.clear()
-            activate_eve_window()
-            rm_x, rm_y = get_coo_or_error(config.get_mouse_reset_coo(), "mouse_reset_coo")
-            fe.drone_out(x=rm_x, y=rm_y)
             tx1, ty1 = get_coo_or_error(config.get_target_one_coo(), "target_one_coo")
             tx2, ty2 = get_coo_or_error(config.get_target_two_coo(), "target_two_coo")
             
@@ -920,7 +950,7 @@ def repeat_function(cargo_loading_time: float, start_from_step: str = "undock") 
                 if stop_flag:
                     return True
                 if cargo_full_event.is_set():
-                    logger.info("Карго заполнено - завершаем майнинг")
+                    logger.warning("Карго заполнено - завершаем майнинг")
                     return True
                 if under_attack_event.is_set():
                     logger.warning("Обнаружена атака - завершаем майнинг")
@@ -945,18 +975,30 @@ def repeat_function(cargo_loading_time: float, start_from_step: str = "undock") 
                 auto_reset_miners=auto_reset_miners,
                 asteroid_depleted=check_asteroid_depleted,
             )
-            activate_eve_window()
-            fe.drone_in()
-            fe.sleep_and_log(SMALL_SLEEP)
+            if not stop_flag:
+                activate_eve_window()
+                fe.drone_in()
+                fe.sleep_and_log(SMALL_SLEEP)
+        
+        if stop_flag:
+            break
         
         # Dock step
         if current_start_index <= step_order.index("dock"):
+            logger.info("Собираем дронов перед возвращением на станцию")
+            activate_eve_window()
+            fe.drone_in()
+            fe.sleep_and_log(SMALL_SLEEP)
+            activate_eve_window()
             fe.auto_dock_to_station(config.get_home_coo())
             fe.sleep_and_log(LONG_SLEEP)
-            activate_eve_window()
+        
+        if stop_flag:
+            break
         
         # Clear cargo step
         if current_start_index <= step_order.index("clear_cargo"):
+            activate_eve_window()
             cg_x, cg_y = get_coo_or_error(config.get_clear_cargo_coo(), "clear_cargo_coo")
             fe.clear_cargo(x=cg_x, y=cg_y)
         
@@ -995,7 +1037,8 @@ def start_function() -> None:
     estimated_run_time_str = fe.get_remaining_time(estimated_run_time)
     logger.info(f"Estimate for completion is {estimated_run_time_str}")
     thread = threading.Thread(
-        target=lambda: repeat_function(cargo_loading_time=cargo_loading_time, start_from_step=start_from)
+        target=lambda: repeat_function(cargo_loading_time=cargo_loading_time, start_from_step=start_from),
+        daemon=True
     )
     thread.start()
 
@@ -1018,5 +1061,20 @@ def start() -> None:
 
 
 def on_closing() -> None:
+    logger.info("Закрытие окна бота - остановка всех процессов...")
+    global stop_flag
+    
+    stop_flag = True
     stop_event_listener()
-    root.destroy()
+    
+    import sys
+    import os
+    
+    try:
+        root.quit()
+        root.destroy()
+    except Exception as e:
+        logger.error(f"Ошибка при закрытии окна: {e}")
+    
+    logger.info("Завершение работы программы...")
+    os._exit(0)

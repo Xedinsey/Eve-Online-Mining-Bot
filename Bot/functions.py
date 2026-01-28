@@ -133,10 +133,13 @@ def mining_behaviour(
     targets_selected = False
 
     while True:
-        activate_eve_window()
+        if is_stopped():
+            logger.info("Mining stopped")
+            break
         
         if asteroid_depleted and asteroid_depleted():
             logger.info("Астероид истощен - разблокируем цели и выбираем новые")
+            activate_eve_window()
             
             if unlock_all_targets_keys:
                 pyautogui.moveTo(rm_x, rm_y)
@@ -169,6 +172,8 @@ def mining_behaviour(
             targets_selected = False
         
         if not targets_selected:
+            activate_eve_window()
+            
             if auto_reset_miners:
                 pyautogui.keyDown("f1")
                 sleep_and_log(0.5)
@@ -189,6 +194,11 @@ def mining_behaviour(
             pyautogui.click(button="left")
             pyautogui.keyUp("ctrl")
             sleep_and_log(3)
+            
+            if is_stopped():
+                logger.info("Mining stopped")
+                break
+            
             activate_eve_window()
             pyautogui.press("f1")
 
@@ -199,6 +209,11 @@ def mining_behaviour(
             pyautogui.click(button="left")
             pyautogui.keyUp("ctrl")
             sleep_and_log(3)
+            
+            if is_stopped():
+                logger.info("Mining stopped")
+                break
+            
             activate_eve_window()
             pyautogui.click(button="left")
             pyautogui.press("f2")

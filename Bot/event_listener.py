@@ -51,18 +51,28 @@ class EveLogHandler:
         line_clean = re.sub(r'\*', '', line_clean)
         line_clean = re.sub(r'\s+', ' ', line_clean).strip()
         
+        cargo_full_patterns = [
+            'your cargo hold is full',
+            'cargo hold is full',
+            'cargo bay is full',
+            'not enough space',
+            'ваш грузовой отсек полон',
+            'грузовой отсек полон',
+            'недостаточно места'
+        ]
+        
+        if any(pattern in line_clean for pattern in cargo_full_patterns):
+            logger.debug(f"Обнаружен паттерн заполнения карго в строке: {line_clean[:100]}")
+            self._trigger_event('cargo_full', line)
+            return
+        
+        if 'завершил функционирование' in line_clean and ('грузовой отсек полон' in line_clean or 'cargo' in line_clean):
+            logger.debug(f"Обнаружена комбинация паттернов заполнения карго в строке: {line_clean[:100]}")
+            self._trigger_event('cargo_full', line)
+            return
+        
         event_patterns = {
-            'cargo_full': [
-                'your cargo hold is full',
-                'cargo hold is full',
-                'cargo bay is full',
-                'not enough space',
-                'ваш грузовой отсек полон',
-                'грузовой отсек полон',
-                'завершил функционирование. ваш грузовой отсек полон',
-                'завершил функционирование. грузовой отсек полон',
-                'недостаточно места'
-            ],
+            'cargo_full': [],
             'under_attack': [
                 'you are being attacked',
                 'you are taking damage',
