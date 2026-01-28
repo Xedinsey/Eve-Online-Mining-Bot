@@ -34,17 +34,22 @@ class EveLogHandler:
                         line_stripped = line.strip()
                         if not line_stripped:
                             continue
+                        
                         line_hash = hash(line_stripped)
                         if line_hash in self.processed_lines:
                             continue
                         self.processed_lines.add(line_hash)
-                        self._check_events(line_stripped)
+                        
+                        if '(mining)' in line or '(notify)' in line:
+                            self._check_events(line_stripped)
         except Exception as e:
             logger.debug(f"Ошибка при чтении лога {file_path}: {e}")
     
     def _check_events(self, line: str):
         line_lower = line.lower()
         line_clean = re.sub(r'<[^>]+>', '', line_lower)
+        line_clean = re.sub(r'\*', '', line_clean)
+        line_clean = re.sub(r'\s+', ' ', line_clean).strip()
         
         event_patterns = {
             'cargo_full': [
@@ -107,7 +112,10 @@ class EveLogHandler:
                 'майнинг завершен',
                 'закончен майнинг',
                 'астероид истощен',
-                'деактивируется, так как добываемый им ресурс обращен в пыль'
+                'деактивируется, так как добываемый им ресурс обращен в пыль',
+                'деактивируется',
+                'ресурс обращен в пыль',
+                'обращен в пыль'
             ],
             'low_shield': [
                 'shield at',
@@ -129,7 +137,12 @@ class EveLogHandler:
         
         for event_type, patterns in event_patterns.items():
             for pattern in patterns:
-                if pattern in line_clean:
+                if '*' in pattern:
+                    regex_pattern = pattern.replace('*', '.*')
+                    if re.search(regex_pattern, line_clean, re.IGNORECASE):
+                        self._trigger_event(event_type, line)
+                        break
+                elif pattern in line_clean:
                     self._trigger_event(event_type, line)
                     break
     
